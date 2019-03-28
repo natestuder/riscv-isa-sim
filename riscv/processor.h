@@ -96,6 +96,7 @@ struct state_t
 
   // control and status registers
   reg_t prv;    // TODO: Can this be an enum instead?
+  reg_t virt;
   reg_t misa;
   reg_t mstatus;
   reg_t bsstatus;
