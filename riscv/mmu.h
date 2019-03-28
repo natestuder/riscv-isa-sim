@@ -396,4 +396,26 @@ inline vm_info decode_vm_info(int xlen, reg_t prv, reg_t satp)
   }
 }
 
+inline vm_info decode_hvm_info(int xlen, reg_t virt, reg_t prv, reg_t hatp)
+{
+  if (prv == PRV_M) {
+    return {0, 0, 0, 0};
+  } else if (virt == 1 && xlen == 32) {
+    switch (get_field(hatp, HATP32_MODE)) {
+      case HATP_MODE_OFF: return {0, 0, 0, 0};
+      case HATP_MODE_SV32x4: return {2, 10, 4, (hatp & HATP32_PPN) << PGSHIFT};
+      default: abort();
+    }
+  } else if (virt == 1 && xlen == 64) {
+    switch (get_field(hatp, HATP64_MODE)) {
+      case HATP_MODE_OFF: return {0, 0, 0, 0};
+      case HATP_MODE_SV39x4: return {3, 9, 8, (hatp & HATP64_PPN) << PGSHIFT};
+      case HATP_MODE_SV48x4: return {4, 9, 8, (hatp & HATP64_PPN) << PGSHIFT};
+      default: abort();
+    }
+  } else {
+    abort();
+  }
+}
+
 #endif
