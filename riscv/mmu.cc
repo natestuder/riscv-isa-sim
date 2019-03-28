@@ -273,8 +273,6 @@ reg_t mmu_t::pmp_homogeneous(reg_t addr, reg_t len)
 reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, reg_t virt)
 {
   vm_info vm = decode_vm_info(proc->max_xlen, mode, proc->get_state()->satp);
-  if (vm.levels == 0)
-    return addr & ((reg_t(2) << (proc->xlen-1))-1); // zero-extend from xlen
 
   bool s_mode  = mode == PRV_S;
   bool vx_mode = virt == 1;
@@ -283,6 +281,12 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, reg_t virt)
 
   bool  good = false;
   reg_t ipa = 0;
+
+  if (vm.levels == 0)
+  {
+     ipa = addr & ((reg_t(2) << (proc->xlen-1))-1); // zero-extend from xlen
+     goto stage2_trans;
+  }
 
   // verify bits xlen-1:va_bits-1 are all equal
   int va_bits = PGSHIFT + vm.levels * vm.idxbits;
@@ -349,7 +353,7 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, reg_t virt)
     }
   }
 
-  if !good
+  if (!good)
   {
      switch (type) {
        case FETCH: throw trap_instruction_page_fault(addr);
@@ -358,7 +362,7 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, reg_t virt)
        default: abort();
      }
   }
-  else if !vx_mode
+  else if (!vx_mode)
   {
      return ipa;
   }
