@@ -307,8 +307,7 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, reg_t virt)
     auto pte_paddr = base + idx * vm.ptesize;
     auto ppte = sim->addr_to_mem(pte_paddr);
 
-    // TBD - is this check needed when a guest?
-    if (!ppte || !pmp_ok(pte_paddr, vm.ptesize, LOAD, PRV_S))
+    if (!ppte || (!vx_mode && !pmp_ok(pte_paddr, vm.ptesize, LOAD, PRV_S)))
       throw_access_exception(addr, type);
 
     reg_t pte = vm.ptesize == 4 ? *(uint32_t*)ppte : *(uint64_t*)ppte;
@@ -340,7 +339,7 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, reg_t virt)
 #ifdef RISCV_ENABLE_DIRTY
       // set accessed and possibly dirty bits.
       if ((pte & ad) != ad) {
-         if (!pmp_ok(pte_paddr, vm.ptesize, STORE, PRV_S))  // Make sure we have permission to write to the page-table entry
+         if (!vx_mode && !pmp_ok(pte_paddr, vm.ptesize, STORE, PRV_S))  // Make sure we have permission to write to the page-table entry
           throw_access_exception(addr, type);
         *(uint32_t*)ppte |= ad;
       }
