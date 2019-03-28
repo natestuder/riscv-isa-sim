@@ -357,6 +357,7 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, reg_t virt)
 
   if (!good)
   {
+     // TBD need to set MTL to 1
      switch (type) {
        case FETCH: throw trap_instruction_page_fault(addr);
        case LOAD: throw trap_load_page_fault(addr);
@@ -424,6 +425,7 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, reg_t virt)
      }
   }
 
+  // TBD need to set MTL to 0
   switch (type) {
     case FETCH: throw trap_instruction_page_fault(ipa);
     case LOAD: throw trap_load_page_fault(ipa);

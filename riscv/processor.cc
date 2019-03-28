@@ -375,15 +375,26 @@ void processor_t::set_csr(int which, reg_t val)
       state.frm = (val & FSR_RD) >> FSR_RD_SHIFT;
       break;
     case CSR_MSTATUS: {
-      if ((val ^ state.mstatus) &
-          (MSTATUS_MPP | MSTATUS_MPRV | MSTATUS_SUM | MSTATUS_MXR))
-        mmu->flush_tlb();
-
       reg_t mask = MSTATUS_SIE | MSTATUS_SPIE | MSTATUS_MIE | MSTATUS_MPIE
                  | MSTATUS_FS | MSTATUS_MPRV | MSTATUS_SUM
                  | MSTATUS_MXR | MSTATUS_TW | MSTATUS_TVM
                  | MSTATUS_TSR | MSTATUS_UXL | MSTATUS_SXL |
                  (ext ? MSTATUS_XS : 0);
+      if (max_xlen == 32) {
+        if ((val ^ state.mstatus) &
+            (MSTATUS32_MPV | MSTATUS_MPP | MSTATUS_MPRV | MSTATUS_SUM | MSTATUS_MXR))
+          mmu->flush_tlb();
+
+        mask |= (MSTATUS32_MTL | MSTATUS32_MPV);
+      }
+      else
+      {
+        if ((val ^ state.mstatus) &
+            (MSTATUS64_MPV | MSTATUS_MPP | MSTATUS_MPRV | MSTATUS_SUM | MSTATUS_MXR))
+          mmu->flush_tlb();
+
+        mask |= (MSTATUS64_MTL | MSTATUS64_MPV);
+      }
 
       reg_t requested_mpp = legalize_privilege(get_field(val, MSTATUS_MPP));
       state.mstatus = set_field(state.mstatus, MSTATUS_MPP, requested_mpp);
@@ -453,7 +464,22 @@ void processor_t::set_csr(int which, reg_t val)
       break;
     case CSR_BSSTATUS: {
       reg_t mask = SSTATUS_SIE | SSTATUS_SPIE | SSTATUS_SPP | SSTATUS_FS
-                   | SSTATUS_XS | SSTATUS_SUM | SSTATUS_MXR;
+                 | SSTATUS_XS | SSTATUS_SUM | SSTATUS_MXR;
+
+      if (max_xlen == 32) {
+        if ((val ^ state.mstatus) & SSTATUS32_MPV)
+          mmu->flush_tlb();
+
+        mask |= (SSTATUS32_MTL | SSTATUS32_MPV);
+      }
+      else
+      {
+        if ((val ^ state.mstatus) & SSTATUS64_MPV)
+          mmu->flush_tlb();
+
+        mask |= (SSTATUS64_MTL | SSTATUS64_MPV);
+      }
+
       // TBD - require virt not set
       return set_csr(CSR_MSTATUS, (state.mstatus & ~mask) | (val & mask));
     }
@@ -653,6 +679,15 @@ reg_t processor_t::get_csr(int which)
     case CSR_BSSTATUS: {
       reg_t mask = SSTATUS_SIE | SSTATUS_SPIE | SSTATUS_SPP | SSTATUS_FS
                  | SSTATUS_XS | SSTATUS_SUM | SSTATUS_MXR | SSTATUS_UXL;
+
+      if (max_xlen == 32) {
+        mask |= (SSTATUS32_MTL | SSTATUS32_MPV);
+      }
+      else
+      {
+        mask |= (SSTATUS64_MTL | SSTATUS64_MPV);
+      }
+
       reg_t sstatus = state.bsstatus & mask;
       if ((sstatus & SSTATUS_FS) == SSTATUS_FS ||
           (sstatus & SSTATUS_XS) == SSTATUS_XS)
