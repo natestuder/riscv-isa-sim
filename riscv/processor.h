@@ -98,6 +98,7 @@ struct state_t
   reg_t prv;    // TODO: Can this be an enum instead?
   reg_t misa;
   reg_t mstatus;
+  reg_t bsstatus;
   reg_t mepc;
   reg_t mtval;
   reg_t mscratch;

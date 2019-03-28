@@ -451,6 +451,12 @@ void processor_t::set_csr(int which, reg_t val)
     case CSR_MCOUNTEREN:
       state.mcounteren = val;
       break;
+    case CSR_BSSTATUS: {
+      reg_t mask = SSTATUS_SIE | SSTATUS_SPIE | SSTATUS_SPP | SSTATUS_FS
+                   | SSTATUS_XS | SSTATUS_SUM | SSTATUS_MXR;
+      // TBD - require virt not set
+      return set_csr(CSR_MSTATUS, (state.mstatus & ~mask) | (val & mask));
+    }
     case CSR_SSTATUS: {
       reg_t mask = SSTATUS_SIE | SSTATUS_SPIE | SSTATUS_SPP | SSTATUS_FS
                  | SSTATUS_XS | SSTATUS_SUM | SSTATUS_MXR;
@@ -644,6 +650,16 @@ reg_t processor_t::get_csr(int which)
       break;
     case CSR_SCOUNTEREN: return state.scounteren;
     case CSR_MCOUNTEREN: return state.mcounteren;
+    case CSR_BSSTATUS: {
+      reg_t mask = SSTATUS_SIE | SSTATUS_SPIE | SSTATUS_SPP | SSTATUS_FS
+                 | SSTATUS_XS | SSTATUS_SUM | SSTATUS_MXR | SSTATUS_UXL;
+      reg_t sstatus = state.bsstatus & mask;
+      if ((sstatus & SSTATUS_FS) == SSTATUS_FS ||
+          (sstatus & SSTATUS_XS) == SSTATUS_XS)
+        sstatus |= (xlen == 32 ? SSTATUS32_SD : SSTATUS64_SD);
+      // TBD - require virt not set
+      return sstatus;
+    }
     case CSR_SSTATUS: {
       reg_t mask = SSTATUS_SIE | SSTATUS_SPIE | SSTATUS_SPP | SSTATUS_FS
                  | SSTATUS_XS | SSTATUS_SUM | SSTATUS_MXR | SSTATUS_UXL;
