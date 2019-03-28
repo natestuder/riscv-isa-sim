@@ -282,20 +282,22 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, reg_t virt)
   bool  good = false;
   reg_t ipa = 0;
 
+  reg_t base = vm.ptbase;
   if (vm.levels == 0)
   {
-     ipa = addr & ((reg_t(2) << (proc->xlen-1))-1); // zero-extend from xlen
-     goto stage2_trans;
+    ipa = addr & ((reg_t(2) << (proc->xlen-1))-1); // zero-extend from xlen
+    goto stage2_trans;
+  }
+  else
+  {
+    // verify bits xlen-1:va_bits-1 are all equal
+    int va_bits = PGSHIFT + vm.levels * vm.idxbits;
+    reg_t mask = (reg_t(1) << (proc->xlen - (va_bits-1))) - 1;
+    reg_t masked_msbs = (addr >> (va_bits-1)) & mask;
+    if (masked_msbs != 0 && masked_msbs != mask)
+      vm.levels = 0;
   }
 
-  // verify bits xlen-1:va_bits-1 are all equal
-  int va_bits = PGSHIFT + vm.levels * vm.idxbits;
-  reg_t mask = (reg_t(1) << (proc->xlen - (va_bits-1))) - 1;
-  reg_t masked_msbs = (addr >> (va_bits-1)) & mask;
-  if (masked_msbs != 0 && masked_msbs != mask)
-    vm.levels = 0;
-
-  reg_t base = vm.ptbase;
   for (int i = vm.levels - 1; i >= 0; i--) {
     int ptshift = i * vm.idxbits;
     reg_t idx = (addr >> (PGSHIFT + ptshift)) & ((1 << vm.idxbits) - 1);
@@ -365,6 +367,14 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, reg_t virt)
   else if (!vx_mode)
   {
      return ipa;
+  }
+
+ stage2_trans:
+  vm = decode_hvm_info(proc->max_xlen, virt, mode, proc->get_state()->hatp);
+
+  if (vm.levels == 0)
+  {
+     return ipa & ((reg_t(2) << (proc->xlen-1))-1); // zero-extend from xlen
   }
 
   switch (type) {
