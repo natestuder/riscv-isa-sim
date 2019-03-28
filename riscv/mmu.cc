@@ -50,12 +50,22 @@ reg_t mmu_t::translate(reg_t addr, reg_t len, access_type type)
     return addr;
 
   reg_t mode = proc->state.prv;
+  reg_t virt = proc->state.virt;
   if (type != FETCH) {
     if (!proc->state.dcsr.cause && get_field(proc->state.mstatus, MSTATUS_MPRV))
+    {
       mode = get_field(proc->state.mstatus, MSTATUS_MPP);
+
+      if (proc->xlen == 32) {
+        virt = get_field(proc->state.mstatus, MSTATUS32_MPV);
+      }
+      else {
+        virt = get_field(proc->state.mstatus, MSTATUS64_MPV);
+      }
+    }
   }
 
-  reg_t paddr = walk(addr, type, mode) | (addr & (PGSIZE-1));
+  reg_t paddr = walk(addr, type, mode, virt) | (addr & (PGSIZE-1));
   if (!pmp_ok(paddr, len, type, mode))
     throw_access_exception(addr, type);
   return paddr;
@@ -260,7 +270,7 @@ reg_t mmu_t::pmp_homogeneous(reg_t addr, reg_t len)
   return true;
 }
 
-reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode)
+reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, reg_t virt)
 {
   vm_info vm = decode_vm_info(proc->max_xlen, mode, proc->get_state()->satp);
   if (vm.levels == 0)
