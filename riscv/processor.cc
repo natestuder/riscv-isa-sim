@@ -473,6 +473,16 @@ void processor_t::set_csr(int which, reg_t val)
         state.satp = val & (SATP64_PPN | SATP64_MODE);
       break;
     }
+    case CSR_HATP: {
+      mmu->flush_tlb();
+      if (max_xlen == 32)
+        state.hatp = val & (HATP32_PPN | HATP32_MODE);
+      if (max_xlen == 64 && (get_field(val, HATP64_MODE) == HATP_MODE_OFF ||
+                             get_field(val, HATP64_MODE) == HATP_MODE_SV39x4 ||
+                             get_field(val, HATP64_MODE) == HATP_MODE_SV48x4))
+        state.hatp = val & (HATP64_PPN | HATP64_MODE);
+      break;
+    }
     case CSR_SEPC: state.sepc = val & ~(reg_t)1; break;
     case CSR_STVEC: state.stvec = val >> 2 << 2; break;
     case CSR_SSCRATCH: state.sscratch = val; break;
@@ -656,6 +666,10 @@ reg_t processor_t::get_csr(int which)
       if (get_field(state.mstatus, MSTATUS_TVM))
         require_privilege(PRV_M);
       return state.satp;
+    case CSR_HATP:
+      if (get_field(state.mstatus, MSTATUS_TVM))
+        require_privilege(PRV_M);
+      return state.hatp;
     case CSR_SSCRATCH: return state.sscratch;
     case CSR_MSTATUS: return state.mstatus;
     case CSR_MIP: return state.mip;

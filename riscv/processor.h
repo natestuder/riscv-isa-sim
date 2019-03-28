@@ -115,6 +115,7 @@ struct state_t
   reg_t sscratch;
   reg_t stvec;
   reg_t satp;
+  reg_t hatp;
   reg_t scause;
   reg_t dpc;
   reg_t dscratch;
