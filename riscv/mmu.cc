@@ -285,22 +285,33 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode)
     // check that physical address of PTE is legal
     auto pte_paddr = base + idx * vm.ptesize;
     auto ppte = sim->addr_to_mem(pte_paddr);
+
+    // TBD - is this check needed when a guest?
     if (!ppte || !pmp_ok(pte_paddr, vm.ptesize, LOAD, PRV_S))
       throw_access_exception(addr, type);
 
     reg_t pte = vm.ptesize == 4 ? *(uint32_t*)ppte : *(uint64_t*)ppte;
     reg_t ppn = pte >> PTE_PPN_SHIFT;
 
+    // Non-leaf PTE
     if (PTE_TABLE(pte)) { // next level of page table
       base = ppn << PGSHIFT;
+      // If user PTE, fault if in supervisor mode and the access is an instruction fetch or supervisor user access is not enabled
+      // If not a user pte, fault if in user mode
     } else if ((pte & PTE_U) ? s_mode && (type == FETCH || !sum) : !s_mode) {
       break;
+      // If the PTE is not valid or if the PTE is a write-only page, fault
     } else if (!(pte & PTE_V) || (!(pte & PTE_R) && (pte & PTE_W))) {
       break;
+      // If the PTE is an instruction fetch to a non-executable page, fault
+      // If the PTE is a load to a non-readable page, fault.  Unless the load is of an executable page and
+      // "make executable readable" is set?
+      // If the PTE is a write to a non-r/w page, fault
     } else if (type == FETCH ? !(pte & PTE_X) :
                type == LOAD ?  !(pte & PTE_R) && !(mxr && (pte & PTE_X)) :
                                !((pte & PTE_R) && (pte & PTE_W))) {
       break;
+      // Super-page, but lower bits are set = fault
     } else if ((ppn & ((reg_t(1) << ptshift) - 1)) != 0) {
       break;
     } else {
@@ -308,7 +319,7 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode)
 #ifdef RISCV_ENABLE_DIRTY
       // set accessed and possibly dirty bits.
       if ((pte & ad) != ad) {
-        if (!pmp_ok(pte_paddr, vm.ptesize, STORE, PRV_S))
+         if (!pmp_ok(pte_paddr, vm.ptesize, STORE, PRV_S))  // Make sure we have permission to write to the page-table entry
           throw_access_exception(addr, type);
         *(uint32_t*)ppte |= ad;
       }
