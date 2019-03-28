@@ -276,9 +276,13 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, reg_t virt)
   if (vm.levels == 0)
     return addr & ((reg_t(2) << (proc->xlen-1))-1); // zero-extend from xlen
 
-  bool s_mode = mode == PRV_S;
+  bool s_mode  = mode == PRV_S;
+  bool vx_mode = virt == 1;
   bool sum = get_field(proc->state.mstatus, MSTATUS_SUM);
   bool mxr = get_field(proc->state.mstatus, MSTATUS_MXR);
+
+  bool  good = false;
+  reg_t ipa = 0;
 
   // verify bits xlen-1:va_bits-1 are all equal
   int va_bits = PGSHIFT + vm.levels * vm.idxbits;
@@ -340,15 +344,29 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, reg_t virt)
 #endif
       // for superpage mappings, make a fake leaf PTE for the TLB's benefit.
       reg_t vpn = addr >> PGSHIFT;
-      reg_t value = (ppn | (vpn & ((reg_t(1) << ptshift) - 1))) << PGSHIFT;
-      return value;
+      ipa = (ppn | (vpn & ((reg_t(1) << ptshift) - 1))) << PGSHIFT;
+      good = true;
     }
   }
 
+  if !good
+  {
+     switch (type) {
+       case FETCH: throw trap_instruction_page_fault(addr);
+       case LOAD: throw trap_load_page_fault(addr);
+       case STORE: throw trap_store_page_fault(addr);
+       default: abort();
+     }
+  }
+  else if !vx_mode
+  {
+     return ipa;
+  }
+
   switch (type) {
-    case FETCH: throw trap_instruction_page_fault(addr);
-    case LOAD: throw trap_load_page_fault(addr);
-    case STORE: throw trap_store_page_fault(addr);
+    case FETCH: throw trap_instruction_page_fault(ipa);
+    case LOAD: throw trap_load_page_fault(ipa);
+    case STORE: throw trap_store_page_fault(ipa);
     default: abort();
   }
 }
