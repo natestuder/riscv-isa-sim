@@ -278,6 +278,7 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, reg_t virt)
   bool vx_mode = virt == 1;
   bool sum = get_field(proc->state.mstatus, MSTATUS_SUM);
   bool mxr = get_field(proc->state.mstatus, MSTATUS_MXR);
+  bool hmxr = get_field(proc->state.bsstatus, MSTATUS_MXR);
 
   bool  good = false;
   reg_t ipa = 0;
@@ -398,7 +399,8 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, reg_t virt)
      } else if (!(pte & PTE_V) || (!(pte & PTE_R) && (pte & PTE_W))) {
         break;
      } else if (type == FETCH ? !(pte & PTE_X) :
-                type == LOAD ?  !(pte & PTE_R) : !((pte & PTE_R) && (pte & PTE_W))) {
+                type == LOAD ?  !(pte & PTE_R) && !(hmxr && (pte & PTE_X)) :
+                                !((pte & PTE_R) && (pte & PTE_W))) {
         break;
      } else if ((ppn & ((reg_t(1) << ptshift) - 1)) != 0) {
         break;
