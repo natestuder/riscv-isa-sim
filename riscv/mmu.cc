@@ -377,6 +377,52 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, reg_t virt)
      return ipa & ((reg_t(2) << (proc->xlen-1))-1); // zero-extend from xlen
   }
 
+  base = vm.ptbase;
+  for (int i = vm.levels - 1; i >= 0; i--) {
+     int ptshift = (i * vm.idxbits) + ((i == vm.levels - 1) ? 2 : 0);// TBD - Gross
+     reg_t idx = (ipa >> (PGSHIFT + ptshift)) & ((1 << vm.idxbits) - 1);
+
+     // check that physical address of PTE is legal
+     auto pte_paddr = base + idx * vm.ptesize;
+     auto ppte = sim->addr_to_mem(pte_paddr);
+     if (!ppte || !pmp_ok(pte_paddr, vm.ptesize, LOAD, PRV_S))
+        throw_access_exception(ipa, type);
+
+     reg_t pte = vm.ptesize == 4 ? *(uint32_t*)ppte : *(uint64_t*)ppte;
+     reg_t ppn = pte >> PTE_PPN_SHIFT;
+
+     if (PTE_TABLE(pte)) { // next level of page table
+        base = ppn << PGSHIFT;
+     } else if (!(pte & PTE_U)) {
+        break;
+     } else if (!(pte & PTE_V) || (!(pte & PTE_R) && (pte & PTE_W))) {
+        break;
+     } else if (type == FETCH ? !(pte & PTE_X) :
+                type == LOAD ?  !(pte & PTE_R) : !((pte & PTE_R) && (pte & PTE_W))) {
+        break;
+     } else if ((ppn & ((reg_t(1) << ptshift) - 1)) != 0) {
+        break;
+     } else {
+        reg_t ad = PTE_A | ((type == STORE) * PTE_D);
+#ifdef RISCV_ENABLE_DIRTY
+        // set accessed and possibly dirty bits.
+        if ((pte & ad) != ad) {
+           if (!pmp_ok(pte_paddr, vm.ptesize, STORE, PRV_S))
+              throw_access_exception(ipa, type);
+           *(uint32_t*)ppte |= ad;
+        }
+#else
+        // take exception if access or possibly dirty bit is not set.
+        if ((pte & ad) != ad)
+           break;
+#endif
+        // for superpage mappings, make a fake leaf PTE for the TLB's benefit.
+        reg_t vpn = ipa >> PGSHIFT;
+        reg_t value = (ppn | (vpn & ((reg_t(1) << ptshift) - 1))) << PGSHIFT;
+        return value;
+     }
+  }
+
   switch (type) {
     case FETCH: throw trap_instruction_page_fault(ipa);
     case LOAD: throw trap_load_page_fault(ipa);
